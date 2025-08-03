@@ -1,0 +1,599 @@
+{
+  "name": "WhatsApp-Driven Google Drive Assistant",
+  "nodes": [
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "twilioApi",
+        "resource": "message",
+        "operation": "receive",
+        "additionalFields": {
+          "fromNumber": "+14155238886",
+          "toNumber": "{{$json['To']}}"
+        }
+      },
+      "name": "Twilio WhatsApp Trigger",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [100, 300],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_credentials",
+          "name": "Twilio credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json['Body']}}",
+              "operation": "startsWith",
+              "value2": "/help"
+            }
+          ]
+        }
+      },
+      "name": "Help Command Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "twilioApi",
+        "resource": "message",
+        "operation": "send",
+        "to": "{{$json['From']}}",
+        "from": "+14155238886",
+        "message": "Available commands:\n/LIST <folder_path> - List files in folder\n/DELETE <file_path> - Delete a file (requires 'CONFIRM' keyword)\n/MOVE <file_path> <destination_folder> - Move a file\n/SUMMARY <folder_path> - Summarize files in folder"
+      },
+      "name": "Send Help Response",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [500, 200],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_credentials",
+          "name": "Twilio credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json['Body']}}",
+              "operation": "startsWith",
+              "value2": "/LIST"
+            }
+          ]
+        }
+      },
+      "name": "List Command Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 500]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "credentialType": "googleDriveOAuth2Api",
+        "resource": "file",
+        "operation": "search",
+        "query": "from:me '{{$json['Body'].split(' ')[1]}}' in parents",
+        "returnAll": true
+      },
+      "name": "List Files in Folder",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [500, 400],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credentials",
+          "name": "Google Drive credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "twilioApi",
+        "resource": "message",
+        "operation": "send",
+        "to": "{{$json['From']}}",
+        "from": "+14155238886",
+        "message": "{{$node['List Files in Folder'].json['items'].map(item => item.name).join('\n') || 'No files found'}}"
+      },
+      "name": "Send File List",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [700, 400],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_credentials",
+          "name": "Twilio credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json['Body']}}",
+              "operation": "startsWith",
+              "value2": "/DELETE"
+            }
+          ]
+        }
+      },
+      "name": "Delete Command Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 700]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json['Body']}}",
+              "operation": "contains",
+              "value2": "CONFIRM"
+            }
+          ]
+        }
+      },
+      "name": "Confirm Delete Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 600]
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "twilioApi",
+        "resource": "message",
+        "operation": "send",
+        "to": "{{$json['From']}}",
+        "from": "+14155238886",
+        "message": "Please include 'CONFIRM' in your DELETE command to proceed."
+      },
+      "name": "Request Delete Confirmation",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [700, 500],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_credentials",
+          "name": "Twilio credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "credentialType": "googleDriveOAuth2Api",
+        "resource": "file",
+        "operation": "delete",
+        "fileId": "{{$json['Body'].split(' ')[1].split('/').pop()}}"
+      },
+      "name": "Delete File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [700, 700],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credentials",
+          "name": "Google Drive credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json['Body']}}",
+              "operation": "startsWith",
+              "value2": "/MOVE"
+            }
+          ]
+        }
+      },
+      "name": "Move Command Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 900]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "credentialType": "googleDriveOAuth2Api",
+        "resource": "file",
+        "operation": "move",
+        "fileId": "{{$json['Body'].split(' ')[1].split('/').pop()}}",
+        "folderId": "{{$json['Body'].split(' ')[2]}}"
+      },
+      "name": "Move File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [500, 800],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credentials",
+          "name": "Google Drive credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "twilioApi",
+        "resource": "message",
+        "operation": "send",
+        "to": "{{$json['From']}}",
+        "from": "+14155238886",
+        "message": "File moved successfully."
+      },
+      "name": "Confirm Move",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [700, 800],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_credentials",
+          "name": "Twilio credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "{{$json['Body']}}",
+              "operation": "startsWith",
+              "value2": "/SUMMARY"
+            }
+          ]
+        }
+      },
+      "name": "Summary Command Check",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [300, 1100]
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "credentialType": "googleDriveOAuth2Api",
+        "resource": "file",
+        "operation": "search",
+        "query": "from:me '{{$json['Body'].split(' ')[1]}}' in parents mimeType='application/pdf' or mimeType='application/vnd.openxmlformats-officedocument.wordprocessingml.document' or mimeType='text/plain'",
+        "returnAll": true
+      },
+      "name": "Get Files for Summary",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [500, 1000],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credentials",
+          "name": "Google Drive credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "credentialType": "googleDriveOAuth2Api",
+        "resource": "file",
+        "operation": "download",
+        "fileId": "{{$node['Get Files for Summary'].json['items'][0].id}}"
+      },
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "typeVersion": 1,
+      "position": [700, 1000],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "google_drive_credentials",
+          "name": "Google Drive credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "credentialType": "openAiApi",
+        "model": "gpt-4o",
+        "prompt": "Provide a concise bullet-point summary of the content in the following file: {{$node['Download File'].binary.data}}"
+      },
+      "name": "Summarize File",
+      "type": "n8n-nodes-base.openAi",
+      "typeVersion": 1,
+      "position": [900, 1000],
+      "credentials": {
+        "openAiApi": {
+          "id": "openai_credentials",
+          "name": "OpenAI credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "twilioApi",
+        "resource": "message",
+        "operation": "send",
+        "to": "{{$json['From']}}",
+        "from": "+14155238886",
+        "message": "{{$node['Summarize File'].json['choices'][0].message.content}}"
+      },
+      "name": "Send Summary",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [1100, 1000],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_credentials",
+          "name": "Twilio credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "oAuth2",
+        "credentialType": "googleSheetsOAuth2Api",
+        "resource": "spreadsheet",
+        "operation": "append",
+        "spreadsheetId": "your_spreadsheet_id",
+        "range": "Sheet1!A:C",
+        "values": [
+          [
+            "{{new Date().toISOString()}}",
+            "{{$json['Body']}}",
+            "{{$node['List Files in Folder'].json['items'] ? 'Success' : $node['Delete File'].json['id'] ? 'Success' : $node['Move File'].json['id'] ? 'Success' : $node['Summarize File'].json['choices'] ? 'Success' : 'Error'}}"
+          ]
+        ]
+      },
+      "name": "Log Action",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [900, 300],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "google_sheets_credentials",
+          "name": "Google Sheets credentials"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "authentication": "predefinedCredentialType",
+        "credentialType": "twilioApi",
+        "resource": "message",
+        "operation": "send",
+        "to": "{{$json['From']}}",
+        "from": "+14155238886",
+        "message": "Invalid command. Use /help for available commands."
+      },
+      "name": "Invalid Command Response",
+      "type": "n8n-nodes-base.twilio",
+      "typeVersion": 1,
+      "position": [300, 1300],
+      "credentials": {
+        "twilioApi": {
+          "id": "twilio_credentials",
+          "name": "Twilio credentials"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Twilio WhatsApp Trigger": {
+      "main": [
+        [
+          {
+            "node": "Help Command Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "List Command Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Delete Command Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Move Command Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Summary Command Check",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Invalid Command Response",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Help Command Check": {
+      "main": [
+        [
+          {
+            "node": "Send Help Response",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "List Command Check": {
+      "main": [
+        [
+          {
+            "node": "List Files in Folder",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "List Files in Folder": {
+      "main": [
+        [
+          {
+            "node": "Send File List",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete Command Check": {
+      "main": [
+        [
+          {
+            "node": "Confirm Delete Check",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Confirm Delete Check": {
+      "main": [
+        [
+          {
+            "node": "Delete File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Request Delete Confirmation",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Delete File": {
+      "main": [
+        [
+          {
+            "node": "Log Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Move Command Check": {
+      "main": [
+        [
+          {
+            "node": "Move File",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Move File": {
+      "main": [
+        [
+          {
+            "node": "Confirm Move",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summary Command Check": {
+      "main": [
+        [
+          {
+            "node": "Get Files for Summary",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Get Files for Summary": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Summarize File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Summarize File": {
+      "main": [
+        [
+          {
+            "node": "Send Summary",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Log Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  ],
+  "settings": {
+    "timezone": "UTC",
+    "errorWorkflow": ""
+  }
+}
